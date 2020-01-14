@@ -1,8 +1,9 @@
 #include <msp430.h>
-#define TXUART BIT2
-#define RXUART BIT1
-#define TXI2C BIT7
-#define RXI2C BIT6
+#define TX		BIT2
+#define RX	  BIT1
+#define SDA 	BIT7
+#define SCL 	BIT6
+
 void __init_i2c(void);
 void __init_UART(void);
 
@@ -10,13 +11,16 @@ int main(void) {
 	WDTCTL = WDTPW + WDTHOLD;			//deshabilita el timer whatchdog
 	__init_UART();
 	__init_i2c();
-	P1SEL |= TXU + BIT7;
-	P1SEL2 |= BIT6 + BIT7;			// habilita los pines 6 y 7 del puerto 1 con sus funciones secundarias (scl y sda)
+	P1SEL |= RX + TX + SCL + SDA;
+	P1SEL2 |= RX + TX + SCL + SDA;			// habilita los pines 1, 2, 6 y 7 del puerto 1 con sus funciones secundarias (RX, TX, scl y sda)
 	UCB0CTL1 &= ~UCSWRST;			// libera el reset del USCI
-	IE2 |= UCB0TXIE;			//habilita interrupcion de transmision del USCI
+	UCA0CTL1 &= ~UCSWRST;                     // **Initialize USCI state machine**
+	IE2 |= UCB0TXIE + UCA0RXIE;			//habilita interrupcion de transmision del USCI sincrono y de recepcion del usci asincrono
 	UCB0I2CSA = 0x28;			//direccion del potenciometro digital max5387
 	UCB0CTL1 |= UCTR + UCTXSTT;			//configra USCI en modo transmision y genera el inicio de la transmision si el bus esta disponible
+  UCB0TXBUF = 0x010;                        // **************
 	__bis_SR_register(CPUOFF + GIE);          // apaga el cpu y habilita las interrupciones generales
+
 }
 
 /*
@@ -34,8 +38,7 @@ void __attribute__ ((interrupt(USCIAB0TX_VECTOR))) USCIAB0TX_ISR (void)
 __interrupt void USCI0RX_ISR(void)
 void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCI0RX_ISR (void)
 {
-  while (!(IFG2&UCA0TXIFG));                // USCI_A0 TX buffer ready?
-  UCA0TXBUF = UCA0RXBUF;                    // TX -> RXed character
+  while (!(IFG2&UCB0TXIFG));                // USCI_A0 TX buffer ready?
 }
 
 void __init_i2c(void){
@@ -47,5 +50,13 @@ void __init_i2c(void){
 }
 
 void __init_UART(void){
+	DCOCTL = 0; // Select lowest DCOx and MODx settings<
+	BCSCTL1 = CALBC1_1MHZ; // Set DCO
+	DCOCTL = CALDCO_1MHZ;
+	UCA0CTL1 = UCSWRST;
+	UCA0CTL1 |= UCSSEL_2;                     // SMCLK
+  UCA0BR0 = 8;                              // 1MHz 115200
+  UCA0BR1 = 0;                              // 1MHz 115200
+  UCA0MCTL = UCBRS2 + UCBRS0;               // Modulation UCBRSx = 5
 
 }
