@@ -1,53 +1,35 @@
 #include <msp430.h>
-#define TX		BIT2
-#define RX	  BIT1
-#define SDA 	BIT7
-#define SCL 	BIT6
+#include <stdbool.h>
 
-void __init_i2c(void);
+#define CS		BIT3
+#define INC		BIT4
+#define UD		BIT5
+bool UP = true;
+bool DOWN = false;
+unsigned int Nsteps = 100;
+
+void __init_wheelchair(void);
 void __init_UART(void);
+void set_pot(unsigned int pos, bool save);
+void step_pot(unsigned int steps, bool dir);
+void desel_save(void);
+void desel_notsave(void);
 
 int main(void) {
 	WDTCTL = WDTPW + WDTHOLD;			//deshabilita el timer whatchdog
-	__init_UART();
-	__init_i2c();
-	P1SEL |= RX + TX + SCL + SDA;
-	P1SEL2 |= RX + TX + SCL + SDA;			// habilita los pines 1, 2, 6 y 7 del puerto 1 con sus funciones secundarias (RX, TX, scl y sda)
-	UCB0CTL1 &= ~UCSWRST;			// libera el reset del USCI
-	UCA0CTL1 &= ~UCSWRST;                     // **Initialize USCI state machine**
-	IE2 |= UCB0TXIE + UCA0RXIE;			//habilita interrupcion de transmision del USCI sincrono y de recepcion del usci asincrono
-	UCB0I2CSA = 0x28;			//direccion del potenciometro digital max5387
-	UCB0CTL1 |= UCTR + UCTXSTT;			//configra USCI en modo transmision y genera el inicio de la transmision si el bus esta disponible
-  UCB0TXBUF = 0x010;                        // **************
+
+	__init_wheelchair();
+	set_pot(75,true);
 	__bis_SR_register(CPUOFF + GIE);          // apaga el cpu y habilita las interrupciones generales
+	while (1)
+	{
+
+	}
 
 }
 
-/*
-// USCI_B0 Data ISR
-#pragma vector = USCIAB0TX_VECTOR
-__interrupt void USCIAB0TX_ISR(void)
-void __attribute__ ((interrupt(USCIAB0TX_VECTOR))) USCIAB0TX_ISR (void)
-{
 
-}
-*/
 
-// Echo back RXed character, confirm TX buffer is ready first
-#pragma vector=USCIAB0RX_VECTOR
-__interrupt void USCI0RX_ISR(void)
-void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCI0RX_ISR (void)
-{
-  while (!(IFG2&UCB0TXIFG));                // USCI_A0 TX buffer ready?
-}
-
-void __init_i2c(void){
-	UCB0CTL1 = UCSWRST;				//habilita el reset por software del modulo USCI
-	UCB0CTL0 = UCMST + UCMODE_3 + UCSYNC;			//configura el USCI para i2c y master
-	UCB0CTL1 = UCSSEL_2 + UCSWRST;			//reloj SMCLK y mantener el reset del USCI
-	UCB0BR0 = 10;					// dividir la frecuencia del reloj 10 veces para tener 100khz
-	UCB0BR1 = 0;
-}
 
 void __init_UART(void){
 	DCOCTL = 0; // Select lowest DCOx and MODx settings<
@@ -58,5 +40,67 @@ void __init_UART(void){
   UCA0BR0 = 8;                              // 1MHz 115200
   UCA0BR1 = 0;                              // 1MHz 115200
   UCA0MCTL = UCBRS2 + UCBRS0;               // Modulation UCBRSx = 5
+}
+
+
+
+void __init_wheelchair(void){
+	P1DIR = BIT0 + CS + INC + UD;     //Configurar pines del puerto 1 como salida
+	P2DIR = BIT0 + BIT1;		//Configurar pines del puerto 2 como salida para ajustar en neutral el control (VS/2)
+	P1OUT = 0;
+	P2OUT = 0;
+	P1OUT |= INC;			      // Activa pin inc del pot digital
+	P2OUT |= BIT0 + BIT1;   // Activa las salidas del cto de control de silla a vs/2 a traves de la compuerta analogica
+	__delay_cycles(1000000);
+	P2OUT &= ~BIT0;
+	P2OUT &= ~BIT1;
+
+}
+
+void set_pot(unsigned int pos, bool save)
+{
+	step_pot (Nsteps, DOWN); 			// Ajusta el wipper al minimo de resistencia dando 100 pasos hacia abajo
+	step_pot (pos, UP);
+	if (save){
+		desel_save();
+	}
+	else {
+		desel_notsave();
+	}
+
+}
+
+void step_pot(unsigned int steps, bool dir)
+{ P1OUT &= ~CS;
+	if (dir==UP)
+	{
+		P1OUT |= UD;
+	}
+	else
+	{
+		P1OUT &= ~UD;
+	}
+	unsigned int i;
+	for (i=0; i<steps; i++)
+	{
+		P1OUT &= ~INC;
+		__delay_cycles(1);
+		P1OUT |= INC;
+		__delay_cycles(1);
+	}
+	__delay_cycles(100);
+}
+
+void desel_save(void)  				// desactiva el chip select guardando el wipper
+{
+	P1OUT |= CS;
+
+}
+
+void desel_notsave(void)
+{
+	P1OUT &= ~INC;
+	P1OUT |= CS;
+	P1OUT |= INC;
 
 }
