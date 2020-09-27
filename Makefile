@@ -3,11 +3,11 @@ CC=msp430-gcc
 # Banderas para compilacion
 CFLAGS= -Wall -g -mmcu=msp430g2553
 # Archivo objeto
-OBJS=i2control.o
+OBJS=WlchrCtrl.o
 
 # Reglas para compilacion
 all: $(OBJS)
-	$(CC) $(CFLAGS) -o i2control.elf $(OBJS)
+	$(CC) $(CFLAGS) -o WlchrCtrl.elf $(OBJS)
 
 # Esta es una regla implicita que dice como compilar todos los
 # archivos con extension *.c para obtener archivos *.o
@@ -17,4 +17,4 @@ all: $(OBJS)
 
 # Borra los archivos *.o y *.elf
 clean:
-	rm -fr i2control.elf $(OBJS)
+	rm -fr WlchrCtrl.elf $(OBJS)
